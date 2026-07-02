@@ -1,0 +1,58 @@
+name: DuyKhanhOS v6 Build System
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  # Lớp 1: Kiểm tra và biên dịch Giao diện đồ họa (GUI)
+  build-gui:
+    name: Biên dịch DuyKhanhWM (X11 GUI)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout mã nguồn
+      uses: actions/checkout@v4
+
+    - name: Cài đặt thư viện phát triển X11
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libx11-dev gcc make
+
+    - name: Biên dịch mã nguồn C
+      run: |
+        gcc -o duykhanhwm duykhanhwm.c -lX11
+
+    - name: Xác minh file chạy GUI
+      run: |
+        if [ -f "./duykhanhwm" ]; then
+          echo "🎉 GUI Biên dịch thành công!"
+        else
+          echo "❌ Lỗi: Không tạo được file duykhanhwm!" && exit 1
+        fi
+
+  # Lớp 2: Kiểm tra cấu hình hệ thống bootloader GRUB tự chế
+  check-grub:
+    name: Kiểm tra Cấu hình GRUB Custom
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout mã nguồn
+      uses: actions/checkout@v4
+
+    - name: Cài đặt công cụ kiểm tra GRUB
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y grub-common
+
+    - name: Xác minh cú pháp file GRUB
+      run: |
+        if [ -f "./grub.cfg" ]; then
+          echo "Đang kiểm tra cú pháp file grub.cfg..."
+          # Sử dụng công cụ của grub để kiểm tra lỗi cú pháp tập tin cấu hình
+          grub-script-check ./grub.cfg
+          echo "🎉 Cấu hình GRUB hợp lệ, không có lỗi cú pháp!"
+        else
+          echo "⚠️ Cảnh báo: Chưa tìm thấy file grub.cfg trong thư mục gốc để kiểm tra."
+          echo "Bạn có thể bỏ qua nếu cấu hình GRUB được lưu ở thư mục khác."
+        fi
