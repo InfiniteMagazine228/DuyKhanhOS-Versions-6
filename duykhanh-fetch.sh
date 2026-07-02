@@ -1,0 +1,12 @@
+#!/bin/bash
+echo -e "\e[36m    ____             __ __                 __  ____  _____\e[0m"
+echo -e "\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m"
+echo -e "\e[36m  / / / / / / / / / / / __ \/ __  / / __  / / / / / /\___ \ \e[0m"
+echo -e "\e[31m / /_/ / /_/ / /_/ / / / / / /_/ / / /_/ / / / /_/ /___/ /\e[0m"
+echo -e "\e[31m/_____/\____/\__,_/_/_/ /_/\__,_/_/\__,_/_/_/\____/____/ \e[0m"
+echo ""
+echo -e "\e[32mOS:\e[0m DuyKhanhOS v6 (Arch-based)"
+echo -e "\e[32mKernel:\e[0m $(uname -r)"
+echo -e "\e[32mUptime:\e[0m $(uptime -p)"
+echo -e "\e[32mShell:\e[0m $SHELL"
+echo -e "\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0"
