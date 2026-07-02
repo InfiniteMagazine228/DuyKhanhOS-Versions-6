@@ -1,56 +1,83 @@
-name: DuyKhanhOS v6 ISO & IMG Release Core
+name: DuyKhanhOS v6 ISO & IMG Core Factory
 
 on:
   push:
     tags:
-      - 'v*' # Kích hoạt tự động khi bạn tạo tag phiên bản (Ví dụ: v6.0, v6.1)
-  workflow_dispatch: # Cho phép bạn bấm nút tự chạy bằng tay trên web GitHub bất cứ lúc nào
+      - 'v*' # Tự động chạy khi bạn tạo tag phiên bản mới (Ví dụ: v6.0, v6.1)
+  workflow_dispatch: # Cho phép bấm nút Build trực tiếp trên giao diện web của GitHub
+
+# Cấu hình cấp quyền tối cao cho GitHub Token để sửa lỗi "Resource not accessible"
+permissions:
+  contents: write
+  actions: read
 
 jobs:
   build-and-release:
-    name: Build DuyKhanhOS ISO & IMG via Arch-Docker
+    name: Build Live System via Arch-Docker Container
     runs-on: ubuntu-latest
     steps:
     - name: Checkout mã nguồn DuyKhanhOS
       uses: actions/checkout@v4
 
-    - name: Khởi tạo và Đóng gói OS bên trong Container Arch Linux
-      # Sử dụng Docker đặc quyền để kích hoạt được các lệnh tạo phân vùng loop device của hệ thống
+    - name: Đóng gói và Xây dựng OS bằng Docker Đặc quyền
+      # Sử dụng quyền --privileged để container thao tác được với các thiết bị loop khi tạo phân vùng đĩa ảo
       run: |
         docker run --privileged -v ${{ github.workspace }}:/workspace archlinux:latest /bin/bash -c "
-          # 1. Cập nhật và cài đặt môi trường tạo OS của Arch Linux
+          # Cập nhật và cài đặt môi trường tạo OS lõi của Arch Linux
           pacman -Sy --noconfirm archiso base-devel libx11 grub squashfs-tools dosfstools git
 
           cd /workspace
-          echo '=== [Bước 1] Biên dịch DuyKhanhWM GUI ==='
+          echo '=== [Vòng 1] Biên dịch DuyKhanhWM GUI C ==='
           gcc -o duykhanhwm duykhanhwm.c -lX11
 
-          echo '=== [Bước 2] Thiết lập cấu trúc Archiso chuẩn ==='
-          cp -r /usr/share/archiso/configs/releng/ ./duykhanhos-profile
+          echo '=== [Vòng 2] Thiết lập cấu trúc Archiso profile ==='
+          cp -r /usr/share/archiso/configs/releng/ ./duykyanhos-profile
           
-          # Đưa file chạy GUI tự viết vào sâu trong nhân hệ thống Live ISO
-          mkdir -p ./duykhanhos-profile/airootfs/usr/local/bin/
-          cp duykhanhwm ./duykhanhos-profile/airootfs/usr/local/bin/
+          # Đưa file chạy GUI độc quyền vào sâu trong hệ thống Live ISO
+          mkdir -p ./duykyanhos-profile/airootfs/usr/local/bin/
+          cp duykhanhwm ./duykyanhos-profile/airootfs/usr/local/bin/
 
-          echo '=== [Bước 3] Cài đặt Calamares, GRUB và công cụ Kali-vibe ==='
-          # Bổ sung các gói cần thiết vào danh sách tải tự động của Arch Linux
-          echo 'calamares' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xorg-server' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xorg-xinit' >> ./duykhanhos-profile/packages.x86_64
-          echo 'alacritty' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xfce4-terminal' >> ./duykhanhos-profile/packages.x86_64
-          echo 'networkmanager' >> ./duykhanhos-profile/packages.x86_64
+          echo '=== [💥 TÍNH NĂNG MỚI] Tạo và đóng gói duykhanh-fetch.sh vào OS ==='
+          # Tạo trực tiếp file script duykhanh-fetch trong thư mục nhị phân hệ thống để gõ lệnh là chạy
+          cat <<'EOF' > ./duykyanhos-profile/airootfs/usr/local/bin/duykhanhfetch
+          #!/bin/bash
+          echo -e \"\e[36m    ____             __ __                 __  ____  _____\e[0m\"
+          echo -e \"\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m\"
+          echo -e \"\e[36m  / / / / / / / / / / / __ \/ __  / / __  / / / / / /\___ \ \e[0m\"
+          echo -e \"\e[31m / /_/ / /_/ / /_/ / / / / / /_/ / / /_/ / / / /_/ /___/ /\e[0m\"
+          echo -e \"\e[31m/_____/\____/\__,_/_/_/ /_/\__,_/_/\__,_/_/_/\____/____/ \e[0m\"
+          echo \"\"
+          echo -e \"\e[32mOS:\e[0m DuyKhanhOS v6 (Arch-based Kali-vibe)\"
+          echo -e \"\e[32mKernel:\e[0m \$(uname -r)\"
+          echo -e \"\e[32mUptime:\e[0m \$(uptime -p)\"
+          echo -e \"\e[32mShell:\e[0m \$SHELL\"
+          echo -e \"\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0 (X11)\"
+          EOF
+          
+          # Cấp quyền thực thi cho bộ công cụ fetch trong nhân ISO
+          chmod +x ./duykyanhos-profile/airootfs/usr/local/bin/duykhanhfetch
 
-          echo '=== [Bước 4] Cấu hình Khởi động tự nạp GUI tối giống Kali ==='
-          mkdir -p ./duykhanhos-profile/airootfs/etc/skel/
-          cat <<EOF > ./duykhanhos-profile/airootfs/etc/skel/.xinitrc
+          echo '=== [Vòng 3] Nạp danh sách ứng dụng, Calamares và công cụ hiển thị ==='
+          # Bổ sung bộ cài Calamares đồ họa và môi trường X11 vào cấu hình tải của Arch
+          echo 'calamares' >> ./duykyanhos-profile/packages.x86_64
+          echo 'xorg-server' >> ./duykyanhos-profile/packages.x86_64
+          echo 'xorg-xinit' >> ./duykyanhos-profile/packages.x86_64
+          echo 'alacritty' >> ./duykyanhos-profile/packages.x86_64
+          echo 'xfce4-terminal' >> ./duykyanhos-profile/packages.x86_64
+          echo 'networkmanager' >> ./duykyanhos-profile/packages.x86_64
+
+          echo '=== [Vòng 4] Thiết lập cấu hình tự nạp GUI tối Kali Linux và tự bật Fetch ==='
+          mkdir -p ./duykyanhos-profile/airootfs/etc/skel/
+          cat <<EOF > ./duykyanhos-profile/airootfs/etc/skel/.xinitrc
           export GTK_THEME=Adwaita-dark
           xsetroot -solid '#0f141c'
+          # Tự động gọi terminal và chạy duykhanhfetch ngay khi vào màn hình
+          alacritty -e duykhanhfetch &
           exec duykhanhwm
           EOF
 
-          echo '=== [Bước 5] Thiết kế GRUB Bootloader độc quyền ==='
-          cat <<EOF > ./duykhanhos-profile/grub/grub.cfg
+          echo '=== [Vòng 5] Khởi tạo menu Bootloader GRUB ==='
+          cat <<EOF > ./duykyanhos-profile/grub/grub.cfg
           set timeout=5
           set default=0
           set menu_color_normal=light-blue/black
@@ -62,17 +89,17 @@ jobs:
           }
           EOF
 
-          echo '=== [Bước 6] Tiến hành Đóng gói hệ thống (Xử lý ra file ISO & IMG) ==='
+          echo '=== [Vòng 6] Tiến hành Đóng gói hệ thống sang ISO & IMG ==='
           mkdir -p ./out_iso ./work_dir
-          mkarchiso -v -w ./work_dir -o ./out_iso ./duykhanhos-profile
+          mkarchiso -v -w ./work_dir -o ./out_iso ./duykyanhos-profile
 
-          echo '=== [Bước 7] Tạo bản sao định dạng .img từ file .iso ==='
-          # File ISO của Archiso mặc định là Hybrid ISO nên chỉ cần đổi tên hoặc dd trực tiếp là thành file IMG nạp thẻ nhớ/USB cứu hộ
+          echo '=== [Vòng 7] Đồng bộ định dạng file cài đặt ==='
+          # Do file đầu ra là Hybrid ISO nên bản sao định dạng .img có thể ghi trực tiếp lên USB để cứu hộ
           cp ./out_iso/*.iso ./out_iso/duykhanhos-v6.img
           mv ./out_iso/*.iso ./out_iso/duykhanhos-v6.iso
         "
 
-    - name: 🚀 Đẩy sản phẩm (ISO & IMG) lên GitHub Releases
+    - name: 🚀 Phát hành sản phẩm (ISO & IMG) lên mục GitHub Releases
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name || 'v6.0-snapshot' }}
