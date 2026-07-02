@@ -3,10 +3,9 @@ name: DuyKhanhOS v6 ISO & IMG Core Factory
 on:
   push:
     tags:
-      - 'v*' # Tự động chạy khi bạn tạo tag phiên bản mới (Ví dụ: v6.0, v6.1)
-  workflow_dispatch: # Cho phép bấm nút Build trực tiếp trên giao diện web của GitHub
+      - 'v*'
+  workflow_dispatch:
 
-# Cấu hình cấp quyền tối cao cho GitHub Token để sửa lỗi "Resource not accessible"
 permissions:
   contents: write
   actions: read
@@ -20,7 +19,6 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Đóng gói và Xây dựng OS bằng Docker Đặc quyền
-      # Sử dụng quyền --privileged để container thao tác được với các thiết bị loop khi tạo phân vùng đĩa ảo
       run: |
         docker run --privileged -v ${{ github.workspace }}:/workspace archlinux:latest /bin/bash -c "
           # Cập nhật và cài đặt môi trường tạo OS lõi của Arch Linux
@@ -31,15 +29,14 @@ jobs:
           gcc -o duykhanhwm duykhanhwm.c -lX11
 
           echo '=== [Vòng 2] Thiết lập cấu trúc Archiso profile ==='
-          cp -r /usr/share/archiso/configs/releng/ ./duykyanhos-profile
+          cp -r /usr/share/archiso/configs/releng/ ./duykhanhos-profile
           
           # Đưa file chạy GUI độc quyền vào sâu trong hệ thống Live ISO
-          mkdir -p ./duykyanhos-profile/airootfs/usr/local/bin/
-          cp duykhanhwm ./duykyanhos-profile/airootfs/usr/local/bin/
+          mkdir -p ./duykhanhos-profile/airootfs/usr/local/bin/
+          cp duykhanhwm ./duykhanhos-profile/airootfs/usr/local/bin/
 
-          echo '=== [💥 TÍNH NĂNG MỚI] Tạo và đóng gói duykhanh-fetch.sh vào OS ==='
-          # Tạo trực tiếp file script duykhanh-fetch trong thư mục nhị phân hệ thống để gõ lệnh là chạy
-          cat <<'EOF' > ./duykyanhos-profile/airootfs/usr/local/bin/duykhanhfetch
+          echo '=== [Vòng 3] Tạo và đóng gói duykhanhfetch vào OS ==='
+          cat <<'EOF' > ./duykhanhos-profile/airootfs/usr/local/bin/duykhanhfetch
           #!/bin/bash
           echo -e \"\e[36m    ____             __ __                 __  ____  _____\e[0m\"
           echo -e \"\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m\"
@@ -54,30 +51,27 @@ jobs:
           echo -e \"\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0 (X11)\"
           EOF
           
-          # Cấp quyền thực thi cho bộ công cụ fetch trong nhân ISO
-          chmod +x ./duykyanhos-profile/airootfs/usr/local/bin/duykhanhfetch
+          chmod +x ./duykhanhos-profile/airootfs/usr/local/bin/duykhanhfetch
 
-          echo '=== [Vòng 3] Nạp danh sách ứng dụng, Calamares và công cụ hiển thị ==='
-          # Bổ sung bộ cài Calamares đồ họa và môi trường X11 vào cấu hình tải của Arch
-          echo 'calamares' >> ./duykyanhos-profile/packages.x86_64
-          echo 'xorg-server' >> ./duykyanhos-profile/packages.x86_64
-          echo 'xorg-xinit' >> ./duykyanhos-profile/packages.x86_64
-          echo 'alacritty' >> ./duykyanhos-profile/packages.x86_64
-          echo 'xfce4-terminal' >> ./duykyanhos-profile/packages.x86_64
-          echo 'networkmanager' >> ./duykyanhos-profile/packages.x86_64
+          echo '=== [Vòng 4] Nạp danh sách ứng dụng, Calamares và công cụ hiển thị ==='
+          echo 'calamares' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xorg-server' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xorg-xinit' >> ./duykhanhos-profile/packages.x86_64
+          echo 'alacritty' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xfce4-terminal' >> ./duykhanhos-profile/packages.x86_64
+          echo 'networkmanager' >> ./duykhanhos-profile/packages.x86_64
 
-          echo '=== [Vòng 4] Thiết lập cấu hình tự nạp GUI tối Kali Linux và tự bật Fetch ==='
-          mkdir -p ./duykyanhos-profile/airootfs/etc/skel/
-          cat <<EOF > ./duykyanhos-profile/airootfs/etc/skel/.xinitrc
+          echo '=== [Vòng 5] Thiết lập cấu hình tự nạp GUI tối Kali Linux và tự bật Fetch ==='
+          mkdir -p ./duykhanhos-profile/airootfs/etc/skel/
+          cat <<EOF > ./duykhanhos-profile/airootfs/etc/skel/.xinitrc
           export GTK_THEME=Adwaita-dark
           xsetroot -solid '#0f141c'
-          # Tự động gọi terminal và chạy duykhanhfetch ngay khi vào màn hình
           alacritty -e duykhanhfetch &
           exec duykhanhwm
           EOF
 
-          echo '=== [Vòng 5] Khởi tạo menu Bootloader GRUB ==='
-          cat <<EOF > ./duykyanhos-profile/grub/grub.cfg
+          echo '=== [Vòng 6] Khởi tạo menu Bootloader GRUB ==='
+          cat <<EOF > ./duykhanhos-profile/grub/grub.cfg
           set timeout=5
           set default=0
           set menu_color_normal=light-blue/black
@@ -89,12 +83,11 @@ jobs:
           }
           EOF
 
-          echo '=== [Vòng 6] Tiến hành Đóng gói hệ thống sang ISO & IMG ==='
+          echo '=== [Vòng 7] Tiến hành Đóng gói hệ thống sang ISO & IMG ==='
           mkdir -p ./out_iso ./work_dir
-          mkarchiso -v -w ./work_dir -o ./out_iso ./duykyanhos-profile
+          mkarchiso -v -w ./work_dir -o ./out_iso ./duykhanhos-profile
 
-          echo '=== [Vòng 7] Đồng bộ định dạng file cài đặt ==='
-          # Do file đầu ra là Hybrid ISO nên bản sao định dạng .img có thể ghi trực tiếp lên USB để cứu hộ
+          echo '=== [Vòng 8] Đồng bộ định dạng file cài đặt ==='
           cp ./out_iso/*.iso ./out_iso/duykhanhos-v6.img
           mv ./out_iso/*.iso ./out_iso/duykhanhos-v6.iso
         "
