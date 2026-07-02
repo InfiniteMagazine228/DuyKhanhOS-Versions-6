@@ -1,58 +1,86 @@
-name: DuyKhanhOS v6 Build System
+name: DuyKhanhOS v6 ISO & IMG Release Core
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    tags:
+      - 'v*' # Kích hoạt tự động khi bạn tạo tag phiên bản (Ví dụ: v6.0, v6.1)
+  workflow_dispatch: # Cho phép bạn bấm nút tự chạy bằng tay trên web GitHub bất cứ lúc nào
 
 jobs:
-  # Lớp 1: Kiểm tra và biên dịch Giao diện đồ họa (GUI)
-  build-gui:
-    name: Biên dịch DuyKhanhWM (X11 GUI)
+  build-and-release:
+    name: Build DuyKhanhOS ISO & IMG via Arch-Docker
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout mã nguồn
+    - name: Checkout mã nguồn DuyKhanhOS
       uses: actions/checkout@v4
 
-    - name: Cài đặt thư viện phát triển X11
+    - name: Khởi tạo và Đóng gói OS bên trong Container Arch Linux
+      # Sử dụng Docker đặc quyền để kích hoạt được các lệnh tạo phân vùng loop device của hệ thống
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libx11-dev gcc make
+        docker run --privileged -v ${{ github.workspace }}:/workspace archlinux:latest /bin/bash -c "
+          # 1. Cập nhật và cài đặt môi trường tạo OS của Arch Linux
+          pacman -Sy --noconfirm archiso base-devel libx11 grub squashfs-tools dosfstools git
 
-    - name: Biên dịch mã nguồn C
-      run: |
-        gcc -o duykhanhwm duykhanhwm.c -lX11
+          cd /workspace
+          echo '=== [Bước 1] Biên dịch DuyKhanhWM GUI ==='
+          gcc -o duykhanhwm duykhanhwm.c -lX11
 
-    - name: Xác minh file chạy GUI
-      run: |
-        if [ -f "./duykhanhwm" ]; then
-          echo "🎉 GUI Biên dịch thành công!"
-        else
-          echo "❌ Lỗi: Không tạo được file duykhanhwm!" && exit 1
-        fi
+          echo '=== [Bước 2] Thiết lập cấu trúc Archiso chuẩn ==='
+          cp -r /usr/share/archiso/configs/releng/ ./duykhanhos-profile
+          
+          # Đưa file chạy GUI tự viết vào sâu trong nhân hệ thống Live ISO
+          mkdir -p ./duykhanhos-profile/airootfs/usr/local/bin/
+          cp duykhanhwm ./duykhanhos-profile/airootfs/usr/local/bin/
 
-  # Lớp 2: Kiểm tra cấu hình hệ thống bootloader GRUB tự chế
-  check-grub:
-    name: Kiểm tra Cấu hình GRUB Custom
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout mã nguồn
-      uses: actions/checkout@v4
+          echo '=== [Bước 3] Cài đặt Calamares, GRUB và công cụ Kali-vibe ==='
+          # Bổ sung các gói cần thiết vào danh sách tải tự động của Arch Linux
+          echo 'calamares' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xorg-server' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xorg-xinit' >> ./duykhanhos-profile/packages.x86_64
+          echo 'alacritty' >> ./duykhanhos-profile/packages.x86_64
+          echo 'xfce4-terminal' >> ./duykhanhos-profile/packages.x86_64
+          echo 'networkmanager' >> ./duykhanhos-profile/packages.x86_64
 
-    - name: Cài đặt công cụ kiểm tra GRUB
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y grub-common
+          echo '=== [Bước 4] Cấu hình Khởi động tự nạp GUI tối giống Kali ==='
+          mkdir -p ./duykhanhos-profile/airootfs/etc/skel/
+          cat <<EOF > ./duykhanhos-profile/airootfs/etc/skel/.xinitrc
+          export GTK_THEME=Adwaita-dark
+          xsetroot -solid '#0f141c'
+          exec duykhanhwm
+          EOF
 
-    - name: Xác minh cú pháp file GRUB
-      run: |
-        if [ -f "./grub.cfg" ]; then
-          echo "Đang kiểm tra cú pháp file grub.cfg..."
-          # Sử dụng công cụ của grub để kiểm tra lỗi cú pháp tập tin cấu hình
-          grub-script-check ./grub.cfg
-          echo "🎉 Cấu hình GRUB hợp lệ, không có lỗi cú pháp!"
-        else
-          echo "⚠️ Cảnh báo: Chưa tìm thấy file grub.cfg trong thư mục gốc để kiểm tra."
-          echo "Bạn có thể bỏ qua nếu cấu hình GRUB được lưu ở thư mục khác."
-        fi
+          echo '=== [Bước 5] Thiết kế GRUB Bootloader độc quyền ==='
+          cat <<EOF > ./duykhanhos-profile/grub/grub.cfg
+          set timeout=5
+          set default=0
+          set menu_color_normal=light-blue/black
+          set menu_color_highlight=black/light-blue
+
+          menuentry 'Cài đặt DuyKhanhOS v6 (Calamares GUI Installer)' {
+              linux /boot/vmlinuz-linux archisobasedir=archiso archisolabel=DUYKHANHOS_V6 cow_spacesize=10G
+              initrd /boot/initramfs-linux.img
+          }
+          EOF
+
+          echo '=== [Bước 6] Tiến hành Đóng gói hệ thống (Xử lý ra file ISO & IMG) ==='
+          mkdir -p ./out_iso ./work_dir
+          mkarchiso -v -w ./work_dir -o ./out_iso ./duykhanhos-profile
+
+          echo '=== [Bước 7] Tạo bản sao định dạng .img từ file .iso ==='
+          # File ISO của Archiso mặc định là Hybrid ISO nên chỉ cần đổi tên hoặc dd trực tiếp là thành file IMG nạp thẻ nhớ/USB cứu hộ
+          cp ./out_iso/*.iso ./out_iso/duykhanhos-v6.img
+          mv ./out_iso/*.iso ./out_iso/duykhanhos-v6.iso
+        "
+
+    - name: 🚀 Đẩy sản phẩm (ISO & IMG) lên GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name || 'v6.0-snapshot' }}
+        name: DuyKhanhOS Version v6.0-Release
+        draft: false
+        prerelease: false
+        files: |
+          out_iso/duykhanhos-v6.iso
+          out_iso/duykhanhos-v6.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
