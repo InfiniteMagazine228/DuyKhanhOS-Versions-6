@@ -23,23 +23,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y squashfs-tools xorriso intel-microcode gcc libx11-dev wget
 
-    - name: 🔥 Buoc 1: Bien dich DuyKhanhWM va tao script Fetch
+    - name: 🔥 Buoc 1: Bien dich DuyKhanhWM GUI C
       run: |
         gcc -o duykhanhwm duykhanhwm.c -lX11
-        
-        # Tao file script duykhanhfetch an toan bang cach xu ly tung dong chu khong dung EOF long nhau
-        echo '#!/bin/bash' > duykhanhfetch
-        echo 'echo -e "\e[36m    ____             __ __                 __  ____  _____\e[0m"' >> duykhanhfetch
-        echo 'echo -e "\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m"' >> duykhanhfetch
-        echo 'echo -e "\e[36m  / / / / / / / / / / / __ \/ __  / / __  / / / / / /\___ \ \e[0m"' >> duykhanhfetch
-        echo 'echo -e "\e[31m / /_/ / /_/ / /_/ / / / / / /_/ / / /_/ / / / /_/ /___/ /\e[0m"' >> duykhanhfetch
-        echo 'echo -e "\e[31m/_____/\____/\__,_/_/_/ /_/\__,_/_/\__,_/_/_/\____/____/ \e[0m"' >> duykhanhfetch
-        echo 'echo ""' >> duykhanhfetch
-        echo 'echo -e "\e[32mOS:\e[0m DuyKhanhOS v6 (Arch modified)"' >> duykhanhfetch
-        echo 'echo -e "\e[32mKernel:\e[0m \$(uname -r)"' >> duykhanhfetch
-        echo 'echo -e "\e[32mUptime:\e[0m \$(uptime -p)"' >> duykhanhfetch
-        echo 'echo -e "\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0 (X11)"' >> duykhanhfetch
-        chmod +x duykhanhfetch
 
     - name: 🌐 Buoc 2: Tai ISO Arch Linux chinh thuc moi nhat
       run: |
@@ -56,7 +42,8 @@ jobs:
       run: |
         # 1. Dua file GUI va Fetch vao he thong
         sudo cp duykhanhwm squashfs_root/usr/local/bin/
-        sudo cp duykhanhfetch squashfs_root/usr/local/bin/
+        sudo cp duykhanhfetch.sh squashfs_root/usr/local/bin/duykhanhfetch
+        sudo chmod +x squashfs_root/usr/local/bin/duykhanhfetch
         
         # 2. Cau hinh tu dong chay Terminal va goi giao dien khi Boot Live ISO
         sudo mkdir -p squashfs_root/etc/skel/
@@ -65,7 +52,7 @@ jobs:
         echo "(alacritty || xterm || xfce4-terminal) -e duykhanhfetch &" | sudo tee -a squashfs_root/etc/skel/.xinitrc
         echo "exec duykhanhwm" | sudo tee -a squashfs_root/etc/skel/.xinitrc
 
-        # 3. Do lai mau sac va tieu de Menu Boot GRUB (Khai bao tinh truc tiep)
+        # 3. Do lai mau sac va tieu de Menu Boot GRUB
         sudo mkdir -p custom_iso/boot/grub/
         echo "set timeout=5" | sudo tee custom_iso/boot/grub/grub.cfg
         echo "set default=0" | sudo tee -a custom_iso/boot/grub/grub.cfg
