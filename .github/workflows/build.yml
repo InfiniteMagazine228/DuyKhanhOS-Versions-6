@@ -1,34 +1,76 @@
-name: DuyKhanhOS v6 Factory
+#!/bin/bash
+set -e # Dừng script ngay nếu có bất kỳ lệnh nào bị lỗi
 
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+echo "=== [1/6] Cài đặt công cụ chỉnh sửa ISO ==="
+sudo apt-get update
+sudo apt-get install -y squashfs-tools xorriso intel-microcode gcc libx11-dev wget
 
-permissions:
-  contents: write
-  actions: read
+echo "=== [2/6] Biên dịch DuyKhanhWM GUI C ==="
+gcc -o duykhanhwm duykhanhwm.c -lX11
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout mã nguồn
-      uses: actions/checkout@v4
+echo "=== [3/6] Tải ISO Arch Linux chính thức mới nhất ==="
+mkdir -p iso_source iso_mnt squashfs_root custom_iso
+wget -q -O archlinux.iso https://pkgbuild.com
 
-    - name: Chạy lệnh đóng gói hệ điều hành
-      run: bash iso_builder.sh
+echo "=== [4/6] Giải nén cấu trúc ISO gốc ==="
+xorriso -osirrox on -indev archlinux.iso -extract / custom_iso/
+chmod -R +w custom_iso/
 
-    - name: Đẩy sản phẩm lên mục Releases
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: DuyKhanhOS Version v6.0-Release (Stable Core)
-        draft: false
-        prerelease: false
-        files: |
-          out_iso/duykhanhos-v6.iso
-          out_iso/duykhanhos-v6.img
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# 🔥 TỰ ĐỘNG TÌM KIẾM VỊ TRÍ FILE SFS CHÍNH XÁC ĐỂ TRÁNH LỖI ĐƯỜNG DẪN
+SFS_PATH=$(find custom_iso/ -name "airootfs.sfs" | head -n 1)
+
+if [ -z "$SFS_PATH" ]; then
+    echo "❌ Không tìm thấy file airootfs.sfs trong toàn bộ cấu trúc ISO!"
+    exit 1
+fi
+
+echo "✅ Đã tìm thấy file nhân tại: $SFS_PATH"
+echo "=== Tiến hành mổ lõi hệ thống ==="
+sudo unsquashfs -d squashfs_root "$SFS_PATH"
+
+echo "=== [5/6] Thay thế cấu hình và chèn đồ chơi DuyKhanhOS (Kali-vibe) ==="
+sudo cp duykhanhwm squashfs_root/usr/local/bin/
+if [ -f "duykhanhfetch.sh" ]; then
+    sudo cp duykhanhfetch.sh squashfs_root/usr/local/bin/duykhanhfetch
+    sudo chmod +x squashfs_root/usr/local/bin/duykhanhfetch
+fi
+
+sudo mkdir -p squashfs_root/etc/skel/
+echo "export GTK_THEME=Adwaita-dark" | sudo tee squashfs_root/etc/skel/.xinitrc
+echo "xsetroot -solid '#0f141c'" | sudo tee -a squashfs_root/etc/skel/.xinitrc
+echo "(alacritty || xterm || xfce4-terminal) -e duykhanhfetch &" | sudo tee -a squashfs_root/etc/skel/.xinitrc
+echo "exec duykhanhwm" | sudo tee -a squashfs_root/etc/skel/.xinitrc
+
+# Tự động tìm và sửa đổi file cấu hình GRUB của ISO gốc
+GRUB_PATH=$(find custom_iso/ -name "grub.cfg" | head -n 1)
+if [ -n "$GRUB_PATH" ]; then
+    echo "=== Độ lại màu sắc và tiêu đề Menu Boot GRUB ==="
+    sudo mkdir -p "$(dirname "$GRUB_PATH")"
+    echo "set timeout=5" | sudo tee "$GRUB_PATH"
+    echo "set default=0" | sudo tee -a "$GRUB_PATH"
+    echo "set menu_color_normal=light-blue/black" | sudo tee -a "$GRUB_PATH"
+    echo "set menu_color_highlight=black/light-blue" | sudo tee -a "$GRUB_PATH"
+    echo "menuentry 'Khởi động DuyKhanhOS v6 (Kali-vibe Đồ Họa)' {" | sudo tee -a "$GRUB_PATH"
+    echo "    linux /boot/vmlinuz-linux archisobasedir=arch cow_spacesize=10G" | sudo tee -a "$GRUB_PATH"
+    echo "    initrd /boot/initramfs-linux.img" | sudo tee -a "$GRUB_PATH"
+    echo "}" | sudo tee -a "$GRUB_PATH"
+fi
+
+echo "=== [6/6] Đóng gói lại thành file ISO và IMG của DuyKhanhOS ==="
+# Xóa file sfs cũ trước khi ghi đè file sfs mới đã chỉnh sửa
+sudo rm -f "$SFS_PATH"
+sudo mksquashfs squashfs_root "$SFS_PATH" -comp xz
+mkdir -p out_iso
+
+xorriso -as mkisofs \
+  -iso-level 3 \
+  -full-iso9660-filenames \
+  -volid "DUYKHANHOS_V6" \
+  -eltorito-boot boot/syslinux/isolinux.bin \
+  -eltorito-catalog boot/syslinux/boot.cat \
+  -no-emul-boot -boot-load-size 4 -boot-info-table \
+  -isohybrid-mbr custom_iso/boot/syslinux/isohdpfx.bin \
+  -output out_iso/duykhanhos-v6.iso custom_iso/
+
+cp out_iso/duykhanhos-v6.iso out_iso/duykhanhos-v6.img
+echo "🎉 Build hoàn tất"
