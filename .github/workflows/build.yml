@@ -1,4 +1,4 @@
-name: DuyKhanhOS v6 ISO & IMG Core Factory
+name: DuyKhanhOS v6 ISO Modification Factory
 
 on:
   push:
@@ -11,88 +11,109 @@ permissions:
   actions: read
 
 jobs:
-  build-and-release:
-    name: Build Live System via Arch-Docker Container
+  modify-iso:
+    name: Mổ ISO Arch Linux và Nhúng DuyKhanhOS v6
     runs-on: ubuntu-latest
     steps:
     - name: Checkout mã nguồn DuyKhanhOS
       uses: actions/checkout@v4
 
-    - name: Đóng gói và Xây dựng OS bằng Docker Đặc quyền
+    - name: Cài đặt công cụ chỉnh sửa ISO
       run: |
-        docker run --privileged -v ${{ github.workspace }}:/workspace archlinux:latest /bin/bash -c "
-          # Cập nhật và cài đặt môi trường tạo OS lõi của Arch Linux
-          pacman -Sy --noconfirm archiso base-devel libx11 grub squashfs-tools dosfstools git
+        sudo apt-get update
+        sudo apt-get install -y squashfs-tools xorriso intel-microcode gcc libx11-dev wget
 
-          cd /workspace
-          echo '=== [Vòng 1] Biên dịch DuyKhanhWM GUI C ==='
-          gcc -o duykhanhwm duykhanhwm.c -lX11
+    - name: 🔥 Bước 1: Biên dịch DuyKhanhWM và chuẩn bị file Fetch
+      run: |
+        # Biên dịch GUI viết bằng C
+        gcc -o duykhanhwm duykhanhwm.c -lX11
+        
+        # Tạo file duykhanhfetch
+        cat <<'EOF' > duykhanhfetch
+        #!/bin/bash
+        echo -e "\e[36m    ____             __ __                 __  ____  _____\e[0m"
+        echo -e "\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m"
+        echo -e "\e[36m  / / / / / / / / / / / __ \/ __  / / __  / / / / / /\___ \ \e[0m"
+        echo -e "\e[31m / /_/ / /_/ / /_/ / / / / / /_/ / / /_/ / / / /_/ /___/ /\e[0m"
+        echo -e "\e[31m/_____/\____/\__,_/_/_/ /_/\__,_/_/\__,_/_/_/\____/____/ \e[0m"
+        echo ""
+        echo -e "\e[32mOS:\e[0m DuyKhanhOS v6 (Arch modified)"
+        echo -e "\e[32mKernel:\e[0m $(uname -r)"
+        echo -e "\e[32mUptime:\e[0m $(uptime -p)"
+        echo -e "\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0 (X11)"
+        EOF
+        chmod +x duykhanhfetch
 
-          echo '=== [Vòng 2] Thiết lập cấu trúc Archiso profile ==='
-          cp -r /usr/share/archiso/configs/releng/ ./duykhanhos-profile
-          
-          # Đưa file chạy GUI độc quyền vào sâu trong hệ thống Live ISO
-          mkdir -p ./duykhanhos-profile/airootfs/usr/local/bin/
-          cp duykhanhwm ./duykhanhos-profile/airootfs/usr/local/bin/
+    - name: 🌐 Bước 2: Tải ISO Arch Linux chính thức mới nhất
+      run: |
+        mkdir -p iso_source iso_mnt squashfs_root custom_iso
+        # Tải bản ISO chính thức trực tiếp từ mirror
+        wget -O archlinux.iso https://pkgbuild.com
 
-          echo '=== [Vòng 3] Tạo và đóng gói duykhanhfetch vào OS ==='
-          cat <<'EOF' > ./duykhanhos-profile/airootfs/usr/local/bin/duykhanhfetch
-          #!/bin/bash
-          echo -e \"\e[36m    ____             __ __                 __  ____  _____\e[0m\"
-          echo -e \"\e[36m   / __ \__  __ __  / // /_  ______  _____/ / / __ \/ ___/\e[0m\"
-          echo -e \"\e[36m  / / / / / / / / / / / __ \/ __  / / __  / / / / / /\___ \ \e[0m\"
-          echo -e \"\e[31m / /_/ / /_/ / /_/ / / / / / /_/ / / /_/ / / / /_/ /___/ /\e[0m\"
-          echo -e \"\e[31m/_____/\____/\__,_/_/_/ /_/\__,_/_/\__,_/_/_/\____/____/ \e[0m\"
-          echo \"\"
-          echo -e \"\e[32mOS:\e[0m DuyKhanhOS v6 (Arch-based Kali-vibe)\"
-          echo -e \"\e[32mKernel:\e[0m \$(uname -r)\"
-          echo -e \"\e[32mUptime:\e[0m \$(uptime -p)\"
-          echo -e \"\e[32mShell:\e[0m \$SHELL\"
-          echo -e \"\e[32mGUI:\e[0m DuyKhanh Custom GUI v1.0 (X11)\"
-          EOF
-          
-          chmod +x ./duykhanhos-profile/airootfs/usr/local/bin/duykhanhfetch
+    - name: 🛠️ Bước 3: Giải nén cấu trúc ISO gốc
+      run: |
+        # Trích xuất nội dung file ISO ra thư mục custom_iso
+        xorriso -osirrox on -indev archlinux.iso -extract / custom_iso/
+        chmod -R +w custom_iso/
+        
+        # Mổ lõi hệ thống nén (airootfs.sfs) của Arch Linux
+        sudo unsquashfs -d squashfs_root custom_iso/arch/x86_64/airootfs.sfs
 
-          echo '=== [Vòng 4] Nạp danh sách ứng dụng, Calamares và công cụ hiển thị ==='
-          echo 'calamares' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xorg-server' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xorg-xinit' >> ./duykhanhos-profile/packages.x86_64
-          echo 'alacritty' >> ./duykhanhos-profile/packages.x86_64
-          echo 'xfce4-terminal' >> ./duykhanhos-profile/packages.x86_64
-          echo 'networkmanager' >> ./duykhanhos-profile/packages.x86_64
+    - name: 🎨 Bước 4: Thay thế cấu hình và chèn đồ chơi DuyKhanhOS (Kali-vibe)
+      run: |
+        # 1. Đưa file GUI và Fetch tự làm vào phân hệ lệnh hệ thống
+        sudo cp duykhanhwm squashfs_root/usr/local/bin/
+        sudo cp duykhanhfetch squashfs_root/usr/local/bin/
+        
+        # 2. Cấu hình tự động chạy Terminal và gọi giao diện khi Boot Live ISO
+        sudo mkdir -p squashfs_root/etc/skel/
+        cat <<EOF | sudo tee squashfs_root/etc/skel/.xinitrc
+        export GTK_THEME=Adwaita-dark
+        xsetroot -solid '#0f141c'
+        # Nếu trên ISO gốc có sẵn terminal, nó sẽ tự bật
+        (alacritty || xterm || xfce4-terminal) -e duykhanhfetch &
+        exec duykhanhwm
+        EOF
 
-          echo '=== [Vòng 5] Thiết lập cấu hình tự nạp GUI tối Kali Linux và tự bật Fetch ==='
-          mkdir -p ./duykhanhos-profile/airootfs/etc/skel/
-          cat <<EOF > ./duykhanhos-profile/airootfs/etc/skel/.xinitrc
-          export GTK_THEME=Adwaita-dark
-          xsetroot -solid '#0f141c'
-          alacritty -e duykhanhfetch &
-          exec duykhanhwm
-          EOF
+        # 3. Độ lại màu sắc và tiêu đề Menu Boot GRUB
+        cat <<EOF | sudo tee custom_iso/boot/grub/grub.cfg
+        set timeout=5
+        set default=0
+        set menu_color_normal=light-blue/black
+        set menu_color_highlight=black/light-blue
 
-          echo '=== [Vòng 6] Khởi tạo menu Bootloader GRUB ==='
-          cat <<EOF > ./duykhanhos-profile/grub/grub.cfg
-          set timeout=5
-          set default=0
-          set menu_color_normal=light-blue/black
-          set menu_color_highlight=black/light-blue
+        menuentry 'Khởi động DuyKhanhOS v6 (Kali-vibe Đồ Họa)' {
+            linux /boot/vmlinuz-linux archisobasedir=arch archisolabel=ARCH_$(date +%Y%m) cow_spacesize=10G
+            initrd /boot/initramfs-linux.img
+        }
+        EOF
 
-          menuentry 'Cài đặt DuyKhanhOS v6 (Calamares GUI Installer)' {
-              linux /boot/vmlinuz-linux archisobasedir=archiso archisolabel=DUYKHANHOS_V6 cow_spacesize=10G
-              initrd /boot/initramfs-linux.img
-          }
-          EOF
+    - name: 📦 Bước 5: Đóng gói lại thành file ISO và IMG của DuyKhanhOS
+      run: |
+        # Xóa file nfs cũ để ghi đè file sfs mới của DuyKhanhOS
+        sudo rm -f custom_iso/arch/x86_64/airootfs.sfs
+        
+        # Nén lại hệ thống rootfs
+        sudo mksquashfs squashfs_root custom_iso/arch/x86_64/airootfs.sfs -comp xz
+        
+        # Tạo thư mục đầu ra
+        mkdir -p out_iso
+        
+        # Dùng xorriso tạo lại file ISO Boot Hybrid (Chạy được cả đĩa và USB)
+        xorriso -as mkisofs \
+          -iso-level 3 \
+          -full-iso9660-filenames \
+          -volid "DUYKHANHOS_V6" \
+          -eltorito-boot boot/syslinux/isolinux.bin \
+          -eltorito-catalog boot/syslinux/boot.cat \
+          -no-emul-boot -boot-load-size 4 -boot-info-table \
+          -isohybrid-mbr custom_iso/boot/syslinux/isohdpfx.bin \
+          -output out_iso/duykhanhos-v6.iso custom_iso/
 
-          echo '=== [Vòng 7] Tiến hành Đóng gói hệ thống sang ISO & IMG ==='
-          mkdir -p ./out_iso ./work_dir
-          mkarchiso -v -w ./work_dir -o ./out_iso ./duykhanhos-profile
+        # Tạo file .img từ bản ISO Hybrid
+        cp out_iso/duykhanhos-v6.iso out_iso/duykhanhos-v6.img
 
-          echo '=== [Vòng 8] Đồng bộ định dạng file cài đặt ==='
-          cp ./out_iso/*.iso ./out_iso/duykhanhos-v6.img
-          mv ./out_iso/*.iso ./out_iso/duykhanhos-v6.iso
-        "
-
-    - name: 🚀 Phát hành sản phẩm (ISO & IMG) lên mục GitHub Releases
+    - name: 🚀 Bước 6: Đẩy sản phẩm lên mục GitHub Releases
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name || 'v6.0-snapshot' }}
