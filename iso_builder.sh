@@ -9,7 +9,7 @@ mkdir -p live_boot/image/boot/grub
 
 echo "=== 2. Tai he thong nen (Ubuntu/Mint Base) ==="
 # SỬA LỖI: Dùng link archive chính thức, không dùng link trang chủ ubuntu.com
-sudo debootstrap --arch=amd64 noble live_boot/chroot http://ubuntu.com
+sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/ubuntu/
 
 echo "=== 3. Cau hinh va cai dat Nhan (Kernel) + Do hoa ==="
 sudo chroot live_boot/chroot apt-get update
