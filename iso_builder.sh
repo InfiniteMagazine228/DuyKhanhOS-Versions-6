@@ -1,59 +1,64 @@
 #!/bin/bash
-set -e # Dừng script ngay nếu có bất kỳ lệnh nào bị lỗi
+set -e
 
-echo "=== [1/6] Cài đặt công cụ chỉnh sửa ISO ==="
-sudo apt-get update
-sudo apt-get install -y squashfs-tools xorriso intel-microcode gcc libx11-dev wget
+echo "=== 1. Tạo cấu trúc thư mục Live ISO ==="
+WORKDIR=$(pwd)
+mkdir -p live_boot/chroot
+mkdir -p live_boot/image/live
+mkdir -p live_boot/image/boot/grub
 
-echo "=== [2/6] Biên dịch DuyKhanhWM GUI C ==="
-gcc -o duykhanhwm duykhanhwm.c -lX11
+echo "=== 2. Tải hệ thống nền (Ubuntu/Mint Base) ==="
+# Sử dụng debootstrap để dựng hệ thống Linux cơ bản mà không cần giải nén file ISO khác
+sudo debootstrap --arch=amd64 noble live_boot/chroot http://ubuntu.com
 
-echo "=== [3/6] Tải ISO Arch Linux chính thức mới nhất ==="
-mkdir -p iso_source iso_mnt squashfs_root custom_iso
-wget -q -O archlinux.iso https://pkgbuild.com
+echo "=== 3. Cấu hình hệ thống và cài đặt môi trường đồ họa ==="
+# Lệnh chroot giúp chui vào bên trong OS mới để cài đặt Xorg và các công cụ cần thiết
+sudo chroot live_boot/chroot apt-get update
+sudo chroot live_boot/chroot apt-get install -y --no-install-recommends \
+    xserver-xorg-core xserver-xorg-input-libinput xinit libx11-6
 
-echo "=== [4/6] Giải nén cấu trúc ISO gốc ==="
-xorriso -osirrox on -indev archlinux.iso -extract / custom_iso/
-chmod -R +w custom_iso/
-sudo unsquashfs -d squashfs_root custom_iso/arch/x86_64/airootfs.sfs
-
-echo "=== [5/6] Thay thế cấu hình và chèn đồ chơi DuyKhanhOS (Kali-vibe) ==="
-sudo cp duykhanhwm squashfs_root/usr/local/bin/
-if [ -f "duykhanhfetch.sh" ]; then
-    sudo cp duykhanhfetch.sh squashfs_root/usr/local/bin/duykhanhfetch
-    sudo chmod +x squashfs_root/usr/local/bin/duykhanhfetch
+echo "=== 4. Biên dịch DuyKhanhWM và tích hợp vào hệ thống ==="
+if [ -f "duykhanhwm.c" ]; then
+    gcc duykhanhwm.c -o duykhanhwm -lX11
+    sudo cp duykhanhwm live_boot/chroot/usr/local/bin/duykhanhwm
+    sudo chmod +x live_boot/chroot/usr/local/bin/duykhanhwm
+    
+    # Cấu hình để khi khởi động, hệ thống tự gọi DuyKhanhWM
+    echo "exec duykhanhwm" | sudo tee live_boot/chroot/root/.xinitrc
+else
+    echo "Cảnh báo: Không tìm thấy file duykhanhwm.c!"
 fi
 
-sudo mkdir -p squashfs_root/etc/skel/
-echo "export GTK_THEME=Adwaita-dark" | sudo tee squashfs_root/etc/skel/.xinitrc
-echo "xsetroot -solid '#0f141c'" | sudo tee -a squashfs_root/etc/skel/.xinitrc
-echo "(alacritty || xterm || xfce4-terminal) -e duykhanhfetch &" | sudo tee -a squashfs_root/etc/skel/.xinitrc
-echo "exec duykhanhwm" | sudo tee -a squashfs_root/etc/skel/.xinitrc
+echo "=== 5. Đưa script duykhanh-fetch vào hệ thống ==="
+if [ -f "duykhanh-fetch.sh" ]; then
+    sudo cp duykhanh-fetch.sh live_boot/chroot/usr/local/bin/duykhanh-fetch
+    sudo chmod +x live_boot/chroot/usr/local/bin/duykhanh-fetch
+fi
 
-sudo mkdir -p custom_iso/boot/grub/
-echo "set timeout=5" | sudo tee custom_iso/boot/grub/grub.cfg
-echo "set default=0" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "set menu_color_normal=light-blue/black" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "set menu_color_highlight=black/light-blue" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "menuentry 'Khởi động DuyKhanhOS v6 (Kali-vibe Đồ Họa)' {" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "    linux /boot/vmlinuz-linux archisobasedir=arch cow_spacesize=10G" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "    initrd /boot/initramfs-linux.img" | sudo tee -a custom_iso/boot/grub/grub.cfg
-echo "}" | sudo tee -a custom_iso/boot/grub/grub.cfg
+echo "=== 6. Nén hệ thống thành file filesystem.squashfs ==="
+sudo mksquashfs live_boot/chroot live_boot/image/live/filesystem.squashfs -noappend -e boot
 
-echo "=== [6/6] Đóng gói lại thành file ISO và IMG của DuyKhanhOS ==="
-sudo rm -f custom_iso/arch/x86_64/airootfs.sfs
-sudo mksquashfs squashfs_root custom_iso/arch/x86_64/airootfs.sfs -comp xz
-mkdir -p out_iso
+echo "=== 7. Cấu hình Menu Boot (GRUB) ==="
+if [ -f "grub.cfg" ]; then
+    cp grub.cfg live_boot/image/boot/grub/grub.cfg
+else
+    # Nếu chưa có file grub.cfg, tự tạo một file mặc định
+    cat << EOF > live_boot/image/boot/grub/grub.cfg
+set default=0
+set timeout=5
 
-xorriso -as mkisofs \
-  -iso-level 3 \
-  -full-iso9660-filenames \
-  -volid "DUYKHANHOS_V6" \
-  -eltorito-boot boot/syslinux/isolinux.bin \
-  -eltorito-catalog boot/syslinux/boot.cat \
-  -no-emul-boot -boot-load-size 4 -boot-info-table \
-  -isohybrid-mbr custom_iso/boot/syslinux/isohdpfx.bin \
-  -output out_iso/duykhanhos-v6.iso custom_iso/
+menuentry "DuyKhanhOS Live (Mint Base)" {
+    linux /live/vmlinuz boot=live quiet splash
+    initrd /live/initrd.img
+}
+EOF
+fi
 
-cp out_iso/duykhanhos-v6.iso out_iso/duykhanhos-v6.img
-echo "🎉 Build hoàn tất xuất sắc!"
+# Sao chép nhân Linux (Kernel) và Ramdisk vào thư mục boot của ISO
+sudo cp live_boot/chroot/boot/vmlinuz-* live_boot/image/live/vmlinuz || true
+sudo cp live_boot/chroot/boot/initrd.img-* live_boot/image/live/initrd.img || true
+
+echo "=== 8. Đóng gói thành file ISO hoàn chỉnh ==="
+grub-mkrescue -o duykhanh-os.iso live_boot/image
+
+echo "=== THÀNH CÔNG: Đã tạo xong file duykhanh-os.iso ==="
