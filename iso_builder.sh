@@ -12,11 +12,17 @@ echo "=== 2. Tai he thong nen (Ubuntu/Mint Base) ==="
 sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/ubuntu/
 
 echo "=== 3. Cau hinh va cai dat Nhan (Kernel) + Do hoa ==="
+# SỬA LỖI: Thêm kho lưu trữ mở rộng (universe) vào danh sách nguồn cấp bên trong chroot
+echo "deb http://ubuntu.com noble main universe" | sudo tee live_boot/chroot/etc/apt/sources.list
+
+# Cập nhật lại danh sách gói để hệ thống nhận diện kho universe mới thêm
 sudo chroot live_boot/chroot apt-get update
-# Cài đặt hạt nhân Linux hệ Live và các gói đồ họa X11 cơ bản
+
+# Tiến hành cài đặt các gói cần thiết (Lần này hệ thống chắc chắn sẽ tìm thấy)
 sudo chroot live_boot/chroot apt-get install -y --no-install-recommends \
     linux-image-generic live-boot live-boot-initramfs-tools \
     xserver-xorg-core xserver-xorg-input-libinput xinit libx11-6 xterm
+
 
 echo "=== 4. Bien dich DuyKhanhWM va tich hop vao he thong ==="
 if [ -f "duykhanhwm.c" ]; then
