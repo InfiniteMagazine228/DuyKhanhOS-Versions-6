@@ -9,7 +9,8 @@ mkdir -p live_boot/image/boot/grub
 
 echo "=== 2. Tải hệ thống nền (Ubuntu/Mint Base) ==="
 # Sử dụng debootstrap để dựng hệ thống Linux cơ bản mà không cần giải nén file ISO khác
-sudo debootstrap --variant=minbase --arch=amd64 noble live_boot/chroot http://ubuntu.com
+sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/ubuntu/
+
 
 echo "=== 3. Cấu hình hệ thống và cài đặt môi trường đồ họa ==="
 # Lệnh chroot giúp chui vào bên trong OS mới để cài đặt Xorg và các công cụ cần thiết
