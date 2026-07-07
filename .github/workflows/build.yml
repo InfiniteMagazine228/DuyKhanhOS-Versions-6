@@ -12,11 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Kéo toàn bộ mã nguồn từ Repo GitHub của bạn vào máy ảo Build
     - name: Checkout repository code
       uses: actions/checkout@v4
 
-    # 2. Cài đặt các công cụ Linux đóng gói và thư viện đồ họa X11 để biên dịch duykhanhwm.c
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -30,18 +28,15 @@ jobs:
           libx11-dev \
           build-essential
 
-    # 3. Cấp quyền thực thi cho các file script hệ thống
     - name: Make scripts executable
       run: |
         chmod +x iso_builder.sh
         if [ -f duykhanh-fetch.sh ]; then chmod +x duykhanh-fetch.sh; fi
 
-    # 4. Kích hoạt file iso_builder.sh để bắt đầu quá trình dựng hệ điều hành
     - name: Run ISO Builder Script
       run: |
         sudo ./iso_builder.sh
 
-    # 5. Đóng gói file ISO thành phẩm và đẩy lên GitHub để bạn tải xuống
     - name: Upload ISO Artifact
       uses: actions/upload-artifact@v4
       with:
