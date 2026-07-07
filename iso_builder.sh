@@ -8,21 +8,16 @@ mkdir -p live_boot/image/live
 mkdir -p live_boot/image/boot/grub
 
 echo "=== 2. Tai he thong nen (Ubuntu/Mint Base) ==="
-# SỬA LỖI: Dùng link archive chính thức, không dùng link trang chủ ubuntu.com
-sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/ubuntu/
+sudo debootstrap --arch=amd64 noble live_boot/chroot http://ubuntu.com
 
 echo "=== 3. Cau hinh va cai dat Nhan (Kernel) + Do hoa ==="
-# SỬA LỖI: Thêm kho lưu trữ mở rộng (universe) vào danh sách nguồn cấp bên trong chroot
+# SỬA LỖI: Thêm kho universe để nhận diện các gói live-boot và xterm
 echo "deb http://ubuntu.com noble main universe" | sudo tee live_boot/chroot/etc/apt/sources.list
-
-# Cập nhật lại danh sách gói để hệ thống nhận diện kho universe mới thêm
 sudo chroot live_boot/chroot apt-get update
 
-# Tiến hành cài đặt các gói cần thiết (Lần này hệ thống chắc chắn sẽ tìm thấy)
 sudo chroot live_boot/chroot apt-get install -y --no-install-recommends \
     linux-image-generic live-boot live-boot-initramfs-tools \
     xserver-xorg-core xserver-xorg-input-libinput xinit libx11-6 xterm
-
 
 echo "=== 4. Bien dich DuyKhanhWM va tich hop vao he thong ==="
 if [ -f "duykhanhwm.c" ]; then
@@ -30,7 +25,7 @@ if [ -f "duykhanhwm.c" ]; then
     sudo cp duykhanhwm live_boot/chroot/usr/local/bin/duykhanhwm
     sudo chmod +x live_boot/chroot/usr/local/bin/duykhanhwm
     
-    # Cấu hình tự động khởi động DuyKhanhWM và gọi script fetch thông tin
+    # Cấu hình khởi chạy đồ họa tự gọi DuyKhanhWM
     echo -e "duykhanh-fetch\nexec duykhanhwm" | sudo tee live_boot/chroot/root/.xinitrc
 else
     echo "Canh bao: Khong tim thay file duykhanhwm.c!"
@@ -40,6 +35,9 @@ echo "=== 5. Dua script duykhanh-fetch vao he thong ==="
 if [ -f "duykhanh-fetch.sh" ]; then
     sudo cp duykhanh-fetch.sh live_boot/chroot/usr/local/bin/duykhanh-fetch
     sudo chmod +x live_boot/chroot/usr/local/bin/duykhanh-fetch
+    
+    # Cấu hình hiển thị script fetch ngay lập tức khi vào CLI Boot Mode (Chế độ 2)
+    echo "/usr/local/bin/duykhanh-fetch" | sudo tee -a live_boot/chroot/root/.bashrc
 fi
 
 echo "=== 6. Nen he thong thanh file filesystem.squashfs ==="
