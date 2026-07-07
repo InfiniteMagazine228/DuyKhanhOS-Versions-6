@@ -9,7 +9,13 @@ int main() {
 
     Window root = DefaultRootWindow(display);
 
-    // Gán phím tắt Alt + F1 để mở terminal chạy script fetch của bạn
+    // BỔ SUNG: Tự động mở cửa sổ Terminal chứa logo DuyKhanhOS ngay khi khởi động
+    if (fork() == 0) {
+        execlp("xterm", "xterm", "-geometry", "80x24+100+100", "-e", "/usr/local/bin/duykhanh-fetch", NULL);
+        exit(0);
+    }
+
+    // Giữ nguyên phím tắt Alt + F1 để mở thêm các cửa sổ Terminal mới sau này
     XGrabKey(display, XKeysymToKeycode(display, XK_F1), Mod1Mask, root, True, GrabModeAsync, GrabModeAsync);
 
     XEvent ev;
@@ -17,8 +23,7 @@ int main() {
         if (ev.type == KeyPress) {
             if (ev.xkey.keycode == XKeysymToKeycode(display, XK_F1) && (ev.xkey.state & Mod1Mask)) {
                 if (fork() == 0) {
-                    // Mở cửa sổ terminal chạy script fetch thông tin DuyKhanhOS
-                    execlp("xterm", "xterm", "-e", "/usr/local/bin/duykhanh-fetch", NULL);
+                    execlp("xterm", "xterm", NULL); // Nhấn Alt + F1 sẽ ra một Terminal trống để gõ lệnh
                     exit(0);
                 }
             }
