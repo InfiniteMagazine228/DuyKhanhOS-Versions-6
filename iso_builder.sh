@@ -8,7 +8,7 @@ mkdir -p live_boot/image/live
 mkdir -p live_boot/image/boot/grub
 
 echo "=== 2. Tai he thong nen (Ubuntu/Mint Base) ==="
-sudo debootstrap --arch=amd64 noble live_boot/chroot http://ubuntu.com
+sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/ubuntu/
 
 echo "=== 3. Cau hinh va cai dat Nhan (Kernel) + Do hoa ==="
 # SỬA LỖI: Thêm kho universe để nhận diện các gói live-boot và xterm
