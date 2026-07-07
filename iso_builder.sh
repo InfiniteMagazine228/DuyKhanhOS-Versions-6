@@ -40,6 +40,23 @@ if [ -f "duykhanh-fetch.sh" ]; then
     echo "/usr/local/bin/duykhanh-fetch" | sudo tee -a live_boot/chroot/root/.bashrc
 fi
 
+echo "=== 5.5 Cấu hình Tự động đăng nhập (Autologin cho tài khoản Root) ==="
+# Tạo thư mục cấu hình dịch vụ khởi động tty1
+sudo mkdir -p live_boot/chroot/etc/systemd/system/getty@tty1.service.d/
+
+# Ghi cấu hình ép hệ thống tự động đăng nhập quyền root mà không hỏi mật khẩu
+cat << EOF | sudo tee live_boot/chroot/etc/systemd/system/getty@tty1.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+EOF
+
+# Đảm bảo file .bashrc của Root sẽ tự động gọi giao diện đồ họa sau khi đăng nhập xong
+echo 'if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    startx
+fi' | sudo tee -a live_boot/chroot/root/.bashrc
+
+
 echo "=== 6. Nen he thong thanh file filesystem.squashfs ==="
 sudo mksquashfs live_boot/chroot live_boot/image/live/filesystem.squashfs -noappend -e boot
 
