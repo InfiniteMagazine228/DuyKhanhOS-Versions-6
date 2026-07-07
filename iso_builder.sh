@@ -12,7 +12,7 @@ sudo debootstrap --arch=amd64 noble live_boot/chroot https://archive.ubuntu.com/
 
 echo "=== 3. Cau hinh va cai dat Nhan (Kernel) + Do hoa ==="
 # SỬA LỖI: Thêm kho universe để nhận diện các gói live-boot và xterm
-echo "deb http://ubuntu.com noble main universe" | sudo tee live_boot/chroot/etc/apt/sources.list
+echo "deb http://archive.ubuntu.com/ubuntu noble main universe" | sudo tee live_boot/chroot/etc/apt/sources.list
 sudo chroot live_boot/chroot apt-get update
 
 sudo chroot live_boot/chroot apt-get install -y --no-install-recommends \
